@@ -2,6 +2,8 @@
 
 A retro, terminal-style situational dashboard. Plain HTML/CSS/JS: no build step, no dependencies.
 
+**Live:** <https://moltarxlr.github.io/Dashboard/>
+
 ```
 [01 LOCATION] [02 SYSTEM / NETWORK]
 [03 RESPIRATORY / PANDEMIC CONDITIONS ......]
@@ -27,7 +29,15 @@ python3 -m http.server 8000
 # open http://localhost:8000
 ```
 
-It also works as-is on GitHub Pages (Settings → Pages → deploy from branch).
+### GitHub Pages
+
+The site is served straight from the repository root (`.nojekyll` tells Pages to skip the Jekyll build). One-time setup:
+
+1. Repo **Settings → Pages**
+2. **Source:** Deploy from a branch
+3. **Branch:** `claude/vibrant-hopper-vt0if8`, folder `/ (root)` → **Save**
+
+After a minute or so it's live at <https://moltarxlr.github.io/Dashboard/>. Every push to that branch redeploys automatically.
 
 ## Controls
 
