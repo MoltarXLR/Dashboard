@@ -1,0 +1,14 @@
+{
+  "name": "sitrep-tools",
+  "private": true,
+  "description": "Offline helpers for SITREP://TERMINAL (not needed to run the dashboard)",
+  "type": "module",
+  "scripts": {
+    "worldmask": "node gen-worldmask.mjs"
+  },
+  "devDependencies": {
+    "d3-geo": "3.1.1",
+    "topojson-client": "3.1.0",
+    "world-atlas": "2.0.2"
+  }
+}

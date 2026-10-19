@@ -438,19 +438,178 @@
     );
   }
 
+  // ---------- 00: world grid ----------
+
+  const mapState = { loc: null, quakes: null };
+
+  // lon/lat -> grid cell, clamped to the mapped latitude band.
+  function toCell(lon, lat) {
+    const m = window.WORLD_MASK;
+    const clamp = (v, max) => Math.min(max - 1, Math.max(0, v));
+    return {
+      r: clamp(Math.floor(((m.latTop - lat) / (m.latTop - m.latBottom)) * m.rows), m.rows),
+      c: clamp(Math.floor(((lon + 180) / 360) * m.cols), m.cols),
+    };
+  }
+
+  function cellBounds(r, c) {
+    const m = window.WORLD_MASK;
+    const lonStep = 360 / m.cols;
+    const latStep = (m.latTop - m.latBottom) / m.rows;
+    const fLat = (v) => `${Math.abs(v).toFixed(1)}°${v >= 0 ? "N" : "S"}`;
+    const fLon = (v) => `${Math.abs(v).toFixed(0)}°${v >= 0 ? "E" : "W"}`;
+    const north = m.latTop - r * latStep;
+    const west = -180 + c * lonStep;
+    return `${fLat(north - latStep)}…${fLat(north)} ${fLon(west)}…${fLon(west + lonStep)}`;
+  }
+
+  const shortPlace = (place) => (place || "unknown").replace(/^.*?\bof\s+/, "");
+  const strongest = (events) => events.reduce((a, b) => (b.properties.mag > a.properties.mag ? b : a));
+
+  // Hotspots: cells with the most events in their 3x3 neighbourhood (longitude wraps),
+  // picked greedily so two hotspots are never within 3 cells of each other.
+  function findHotspots(quakes, max = 2) {
+    const m = window.WORLD_MASK;
+    const cells = new Map();
+    for (const f of quakes) {
+      const { r, c } = toCell(f.geometry.coordinates[0], f.geometry.coordinates[1]);
+      const k = `${r},${c}`;
+      if (!cells.has(k)) cells.set(k, []);
+      cells.get(k).push(f);
+    }
+    const colDist = (a, b) => Math.min(Math.abs(a - b), m.cols - Math.abs(a - b));
+    const scored = [...cells.keys()].map((k) => {
+      const [r, c] = k.split(",").map(Number);
+      const events = [];
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          events.push(...(cells.get(`${r + dr},${(c + dc + m.cols) % m.cols}`) || []));
+        }
+      }
+      return { r, c, events, top: strongest(events) };
+    });
+    scored.sort((a, b) => b.events.length - a.events.length || b.top.properties.mag - a.top.properties.mag);
+
+    const picks = [];
+    for (const s of scored) {
+      if (picks.length >= max || s.events.length < 2) break;
+      if (picks.some((p) => Math.abs(p.r - s.r) <= 3 && colDist(p.c, s.c) <= 3)) continue;
+      picks.push(s);
+    }
+    return picks;
+  }
+
+  function renderMap() {
+    const m = window.WORLD_MASK;
+    if (!m) {
+      setBody("map-body", errBox("worldmask.js failed to load"));
+      return;
+    }
+    const lonStep = 360 / m.cols;
+    const latStep = (m.latTop - m.latBottom) / m.rows;
+    $("map-scale").textContent = `// ${m.cols}×${m.rows} · ${+lonStep.toFixed(2)}° lon × ${+latStep.toFixed(2)}° lat per dot`;
+
+    const { loc, quakes } = mapState;
+    const latest = quakes?.[0];
+    const hotspots = quakes ? findHotspots(quakes) : [];
+    const tsunamis = (quakes || []).filter((f) => f.properties.tsunami);
+
+    // Per-cell labels for the hover readout.
+    const labels = new Map();
+    const label = (r, c, text) => labels.set(`${r},${c}`, [...(labels.get(`${r},${c}`) || []), text]);
+
+    const dot = (r, c, rad, cls) => `<circle cx="${c + 0.5}" cy="${r + 0.5}" r="${rad}" class="${cls}"/>`;
+    const parts = [];
+    for (let r = 0; r < m.rows; r++) {
+      for (let c = 0; c < m.cols; c++) {
+        parts.push(m.grid[r][c] === "#" ? dot(r, c, 0.34, "land") : dot(r, c, 0.1, "ocean"));
+      }
+    }
+    // Overlay, lowest priority first so the device marker is drawn on top.
+    hotspots.forEach((h, i) => {
+      parts.push(dot(h.r, h.c, 0.42, "mk mk-hot"), dot(h.r, h.c, 0.9, "ring hot"));
+      label(h.r, h.c, `HOTSPOT #${i + 1}: ${h.events.length}× M4+`);
+    });
+    for (const f of tsunamis) {
+      const { r, c } = toCell(f.geometry.coordinates[0], f.geometry.coordinates[1]);
+      parts.push(dot(r, c, 0.75, "ring tsunami"));
+      label(r, c, `TSUNAMI FLAG M${fmtNum(f.properties.mag, 1)}`);
+    }
+    if (latest) {
+      const { r, c } = toCell(latest.geometry.coordinates[0], latest.geometry.coordinates[1]);
+      parts.push(dot(r, c, 0.42, "mk mk-quake"), dot(r, c, 0.6, "ring quake ping"));
+      label(r, c, `LATEST M${fmtNum(latest.properties.mag, 1)} ${shortPlace(latest.properties.place)}`);
+    }
+    if (loc) {
+      const { r, c } = toCell(loc.lon, loc.lat);
+      parts.push(dot(r, c, 0.42, "mk mk-you"), dot(r, c, 0.6, "ring you ping"));
+      label(r, c, "YOU ARE HERE");
+    }
+
+    const legendRow = (glyph, cls, name, text) => `<tr><td><span class="${cls}">${glyph}</span> ${name}</td><td>${text}</td></tr>`;
+    const legend = [
+      legendRow("●", "dot-you", "YOU", loc
+        ? esc([loc.city, loc.state, loc.countryCode].filter(Boolean).join(", ") || `${loc.lat.toFixed(2)}, ${loc.lon.toFixed(2)}`)
+        : '<span class="dim">location unavailable</span>'),
+      legendRow("●", "dot-quake", "LATEST M4+", latest
+        ? `M${fmtNum(latest.properties.mag, 1)} · ${esc(latest.properties.place || "unknown")} · ${ago(latest.properties.time)}`
+        : '<span class="dim">waiting for USGS</span>'),
+      ...hotspots.map((h, i) =>
+        legendRow("●", "dot-hot", `HOTSPOT #${i + 1}`,
+          `${h.events.length}× M4+ in ${QUAKE_WINDOW_DAYS}d · max M${fmtNum(h.top.properties.mag, 1)} · near ${esc(shortPlace(h.top.properties.place))}`)),
+      quakes && !hotspots.length ? legendRow("●", "dot-hot", "HOTSPOT", '<span class="dim">no clusters this week</span>') : "",
+      legendRow("◌", "dot-quake", "TSUNAMI FLAG", tsunamis.length
+        ? tsunamis.map((f) => `M${fmtNum(f.properties.mag, 1)} ${esc(shortPlace(f.properties.place))}`).join(" · ")
+        : `<span class="dim">${quakes ? `none in last ${QUAKE_WINDOW_DAYS}d` : "waiting for USGS"}</span>`),
+    ].join("");
+
+    setBody(
+      "map-body",
+      `<svg class="worldmap" viewBox="0 0 ${m.cols} ${m.rows}" role="img" aria-label="Dot-matrix world map showing your location and recent earthquake activity">${parts.join("")}</svg>` +
+        `<div class="map-readout" id="map-readout">&gt; hover a dot for coordinates</div>` +
+        `<table class="tt legend">${legend}</table>` +
+        `<div class="src">src: Natural Earth 1:110m land mask · USGS M4.0+ events, last ${QUAKE_WINDOW_DAYS} days · hotspot = densest 3×3-dot cluster · tsunami flag = USGS marks a large oceanic event (links to NOAA tsunami info; not a confirmed tsunami)</div>`
+    );
+
+    const svg = $("map-body").querySelector("svg");
+    const readout = $("map-readout");
+    const onPoint = (ev) => {
+      const box = svg.getBoundingClientRect();
+      const c = Math.floor(((ev.clientX - box.left) / box.width) * m.cols);
+      const r = Math.floor(((ev.clientY - box.top) / box.height) * m.rows);
+      if (r < 0 || r >= m.rows || c < 0 || c >= m.cols) return;
+      const what = labels.get(`${r},${c}`);
+      readout.textContent = `> [${pad(r)},${pad(c)}] ${cellBounds(r, c)} · ${m.grid[r][c] === "#" ? "LAND" : "OCEAN"}${what ? " · " + what.join(" · ") : ""}`;
+    };
+    svg.addEventListener("mousemove", onPoint);
+    svg.addEventListener("click", onPoint);
+  }
+
   // ---------- 04: earthquakes ----------
+
+  const QUAKE_WINDOW_DAYS = 7;
 
   async function loadQuake(locPromise) {
     try {
-      const params = new URLSearchParams({ format: "geojson", minmagnitude: "4", orderby: "time", limit: "6" });
-      const data = await fetchJSON(`${API.usgs}?${params}`);
+      // One request serves both the latest-event tile and the map hotspots.
+      const params = new URLSearchParams({
+        format: "geojson",
+        minmagnitude: "4",
+        orderby: "time",
+        starttime: new Date(Date.now() - QUAKE_WINDOW_DAYS * 86400000).toISOString().slice(0, 19),
+        limit: "2000",
+      });
+      const data = await fetchJSON(`${API.usgs}?${params}`, { timeout: 25000 });
       const feats = data.features || [];
+      mapState.quakes = feats;
+      renderMap();
       if (!feats.length) {
         setBody("quake-body", '<span class="dim">no M4.0+ events returned</span>');
         return;
       }
       const loc = await locPromise;
-      const [q, ...rest] = feats;
+      const [q, ...more] = feats;
+      const rest = more.slice(0, 5);
       const p = q.properties;
       const [lon, lat, depth] = q.geometry.coordinates;
       const dist = loc ? haversineKm(loc.lat, loc.lon, lat, lon) : null;
@@ -586,6 +745,7 @@
     log("refresh: all feeds");
     const ipGeoPromise = loadSystem().catch((e) => { log(`system: ${e.message}`, "err"); return null; });
     locPromise = loadLocation(ipGeoPromise).catch((e) => { log(`location: ${e.message}`, "err"); return null; });
+    locPromise.then((loc) => { mapState.loc = loc; renderMap(); });
     loadHealth(locPromise).catch((e) => setBody("health-body", errBox(e.message)));
     loadQuake(locPromise);
     loadNeo();
@@ -596,6 +756,7 @@
     startClock();
     initTheme();
     initNasaKeyForm();
+    renderMap();
     refreshAll();
 
     $("btn-refresh").addEventListener("click", refreshAll);

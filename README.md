@@ -5,6 +5,7 @@ A retro, terminal-style situational dashboard. Plain HTML/CSS/JS: no build step,
 **Live:** <https://moltarxlr.github.io/Dashboard/>
 
 ```
+[00 WORLD GRID ..............................]
 [01 LOCATION] [02 SYSTEM / NETWORK]
 [03 RESPIRATORY / PANDEMIC CONDITIONS ......]
 [04 SEISMIC M4.0+] [05 NEAR-EARTH OBJECTS]
@@ -14,6 +15,7 @@ A retro, terminal-style situational dashboard. Plain HTML/CSS/JS: no build step,
 
 | # | Tile | Source |
 |---|------|--------|
+| 00 | Dot-matrix world map (60×30, each dot ≈ 6° lon × 4.8° lat, 84°N to 60°S). **Cyan** = your device, **red** = latest M4.0+ quake, **magenta** = the top two earthquake hotspots (densest clusters of M4.0+ events in the past 7 days), dashed red ring = USGS tsunami flag. Hover or tap a dot to read its coordinates. | Land mask from [Natural Earth](https://www.naturalearthdata.com/) 1:110m via `world-atlas`, pre-generated into `worldmask.js`. Quakes from USGS (same request as tile 04). |
 | 01 | Device location (lat/lon, accuracy, city/county/state) | Browser [Geolocation API](https://developer.mozilla.org/docs/Web/API/Geolocation_API), reverse geocoded with [BigDataCloud](https://www.bigdatacloud.com/free-api/free-reverse-geocode-to-city-api). Falls back to IP geolocation if permission is denied. |
 | 02 | Browser, OS, public IP, ISP, screen, cores, connection | `navigator` / User-Agent Client Hints, [ipify](https://www.ipify.org/), [GeoJS](https://www.geojs.io/) |
 | 03 | % of ER visits for COVID-19, flu, and RSV, with CDC trend direction, for your county, your state, and the US | [CDC NSSP ED Visit Trajectories](https://data.cdc.gov/Public-Health-Surveillance/NSSP-Emergency-Department-Visit-Trajectories-by-St/rdmq-nq56) (`data.cdc.gov` Socrata API). Outside the US, or if the CDC is unreachable, it shows general COVID-19 totals from [disease.sh](https://disease.sh/). |
@@ -38,6 +40,15 @@ The site is served straight from the repository root (`.nojekyll` tells Pages to
 3. **Branch:** `claude/vibrant-hopper-vt0if8`, folder `/ (root)` → **Save**
 
 After a minute or so it's live at <https://moltarxlr.github.io/Dashboard/>. Every push to that branch redeploys automatically.
+
+### Changing the map resolution
+
+`worldmask.js` is generated offline, so the page itself has no dependencies. To rebuild it at another size, e.g. 30×30:
+
+```sh
+cd tools && npm install
+node gen-worldmask.mjs 30 30        # args: cols rows [latTop=84] [latBottom=-60]
+```
 
 ## Controls
 

@@ -20,6 +20,11 @@
     <pre class="bootlog" id="bootlog" aria-live="polite"></pre>
 
     <main class="grid">
+      <section class="tile wide" id="tile-map">
+        <h2><span class="tag">00</span> WORLD GRID <span class="dim" id="map-scale"></span></h2>
+        <div class="body" id="map-body"><span class="dim">plotting<span class="cursor">_</span></span></div>
+      </section>
+
       <section class="tile" id="tile-location">
         <h2><span class="tag">01</span> LOCATION</h2>
         <div class="body" id="location-body"><span class="dim">acquiring fix<span class="cursor">_</span></span></div>
@@ -55,6 +60,7 @@
       <span class="dim">Data: browser Geolocation · BigDataCloud · ipify/GeoJS · CDC NSSP · USGS · NASA NeoWs</span>
     </footer>
   </div>
+  <script src="worldmask.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -6,6 +6,10 @@
   --warn: #ffcc33;
   --alert: #ff5544;
   --glow: 0 0 4px rgba(51, 255, 102, 0.55);
+  /* World grid marker colors (CGA-style, same in both themes) */
+  --you: #3cf0ff;
+  --hot: #ff4fd8;
+  --quake: #ff4040;
 }
 
 :root[data-theme="amber"] {
@@ -137,6 +141,30 @@ table.tt td { padding: 2px 8px 2px 0; vertical-align: top; white-space: nowrap; 
 }
 .health-grid > div { border: 1px dashed var(--faint); padding: 8px; }
 
+/* World grid */
+.worldmap { display: block; width: 100%; max-width: 1000px; height: auto; margin: 0 auto; cursor: crosshair; }
+.worldmap .land { fill: var(--fg); }
+.worldmap .ocean { fill: var(--faint); }
+.worldmap .mk { filter: drop-shadow(0 0 0.25px currentColor); }
+.worldmap .mk-you { fill: var(--you); color: var(--you); }
+.worldmap .mk-quake { fill: var(--quake); color: var(--quake); }
+.worldmap .mk-hot { fill: var(--hot); color: var(--hot); }
+.worldmap .ring { fill: none; stroke-width: 0.12; transform-box: fill-box; transform-origin: center; }
+.worldmap .ring.you { stroke: var(--you); }
+.worldmap .ring.quake { stroke: var(--quake); }
+.worldmap .ring.hot { stroke: var(--hot); }
+.worldmap .ring.tsunami { stroke: var(--quake); stroke-dasharray: 0.25 0.18; }
+.worldmap .ring.ping { animation: ping 1.8s ease-out infinite; }
+@keyframes ping { from { transform: scale(0.5); opacity: 1; } to { transform: scale(2.4); opacity: 0; } }
+
+.map-readout { min-height: 1.45em; margin: 6px 0 8px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+table.tt.legend { width: auto; }
+table.tt.legend td { white-space: normal; padding-right: 16px; }
+table.tt.legend td:first-child { white-space: nowrap; }
+.dot-you { color: var(--you); }
+.dot-quake { color: var(--quake); }
+.dot-hot { color: var(--hot); }
+
 .cursor { animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 
@@ -167,5 +195,5 @@ table.tt td { padding: 2px 8px 2px 0; vertical-align: top; white-space: nowrap; 
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cursor { animation: none; }
+  .cursor, .worldmap .ring.ping { animation: none; }
 }
