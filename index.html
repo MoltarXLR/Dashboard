@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SITREP Terminal</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="crt">
+    <header class="topbar">
+      <span class="brand">SITREP://TERMINAL <span class="ver">v1.0</span></span>
+      <span class="clock" id="clock">--:--:--</span>
+      <span class="actions">
+        <button id="btn-refresh" title="Refresh all (R)">[R]EFRESH</button>
+        <button id="btn-theme" title="Toggle phosphor color (T)">[T]HEME</button>
+      </span>
+    </header>
+
+    <pre class="bootlog" id="bootlog" aria-live="polite"></pre>
+
+    <main class="grid">
+      <section class="tile" id="tile-location">
+        <h2><span class="tag">01</span> LOCATION</h2>
+        <div class="body" id="location-body"><span class="dim">acquiring fix<span class="cursor">_</span></span></div>
+      </section>
+
+      <section class="tile" id="tile-system">
+        <h2><span class="tag">02</span> SYSTEM / NETWORK</h2>
+        <div class="body" id="system-body"><span class="dim">probing<span class="cursor">_</span></span></div>
+      </section>
+
+      <section class="tile wide" id="tile-health">
+        <h2><span class="tag">03</span> RESPIRATORY / PANDEMIC CONDITIONS</h2>
+        <div class="body" id="health-body"><span class="dim">waiting for location<span class="cursor">_</span></span></div>
+      </section>
+
+      <section class="tile" id="tile-quake">
+        <h2><span class="tag">04</span> SEISMIC // LATEST M4.0+</h2>
+        <div class="body" id="quake-body"><span class="dim">querying usgs<span class="cursor">_</span></span></div>
+      </section>
+
+      <section class="tile" id="tile-neo">
+        <h2><span class="tag">05</span> NEAR-EARTH OBJECTS // INBOUND</h2>
+        <div class="body" id="neo-body"><span class="dim">querying nasa neows<span class="cursor">_</span></span></div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <form id="nasa-key-form" class="keyform">
+        <label for="nasa-key">NASA_API_KEY&gt;</label>
+        <input id="nasa-key" type="text" placeholder="DEMO_KEY" autocomplete="off" spellcheck="false">
+        <button type="submit">SET</button>
+      </form>
+      <span class="dim">Data: browser Geolocation · BigDataCloud · ipify/GeoJS · CDC NSSP · USGS · NASA NeoWs</span>
+    </footer>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
