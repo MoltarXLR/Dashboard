@@ -595,8 +595,8 @@
         nws.slice(0, 6).map((a) =>
           `<div class="alert-item ${sevClass(a.severity)}">` +
             `<div><b>${esc(a.event.toUpperCase())}</b> <span class="dim">[${esc(a.severity)} · ${esc(a.urgency)}]</span></div>` +
-            `<div class="dim">${esc(shortTime(a.onset || a.effective))} → ${esc(shortTime(a.ends || a.expires))}</div>` +
-            (a.headline ? `<div>${esc(a.headline)}</div>` : "") +
+            // The NWS headline only repeats event, times and office, so show those compactly instead.
+            `<div class="dim">${esc(shortTime(a.onset || a.effective))} → ${esc(shortTime(a.ends || a.expires))}${a.senderName ? ` · ${esc(a.senderName)}` : ""}</div>` +
             (a.instruction ? `<div class="dim">&gt; ${esc(a.instruction.replace(/\s+/g, " ").slice(0, 280))}${a.instruction.length > 280 ? "…" : ""}</div>` : "") +
           `</div>`
         ).join("") + (nws.length > 6 ? `<div class="dim">+${nws.length - 6} more</div>` : "")
@@ -1078,6 +1078,7 @@
   const kiosk = { on: false, wakeLock: null, timers: [], raf: 0, pos: 0, pauseUntil: 0 };
   const KIOSK_RELOAD_MS = 6 * 60 * 60 * 1000;
   const SCROLL_PX_PER_MS = 0.03; // ~30 px/s
+  const KIOSK_LAYOUT_PX = 1600; // lower = bigger text on the TV, but fewer tiles per row
 
   async function requestWakeLock() {
     if (!kiosk.on || !navigator.wakeLock || document.visibilityState !== "visible") return;
@@ -1089,8 +1090,9 @@
   }
 
   function applyKioskZoom() {
-    // Lay the page out as if the screen were ~1280px wide, then scale it up to fill the TV.
-    document.body.style.zoom = kiosk.on ? String(Math.min(3, Math.max(1, window.innerWidth / 1280))) : "";
+    // Lay the page out as if the screen were KIOSK_LAYOUT_PX wide (enough for the
+    // weather | alerts | map row), then scale it up to fill the TV.
+    document.body.style.zoom = kiosk.on ? String(Math.min(3, Math.max(1, window.innerWidth / KIOSK_LAYOUT_PX))) : "";
   }
 
   // Scroll slowly to the bottom, hold 10 s, return to the top, hold 20 s, repeat.

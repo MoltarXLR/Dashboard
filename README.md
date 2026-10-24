@@ -6,12 +6,13 @@ A retro, terminal-style situational dashboard. Plain HTML/CSS/JS: no build step,
 
 ```
 [!! SEVERE-ALERT BANNER (only when one is active) !!]
-[01 WEATHER] [02 LOCAL ALERTS / EMERGENCIES]
-[03 WORLD GRID ..............................]
-[04 LOCATION] [05 SYSTEM / NETWORK]
+[01 WEATHER] [02 LOCAL ALERTS] [03 WORLD GRID ........]
+[04 LOCATION ...........] [05 SYSTEM / NETWORK .....]
 [06 RESPIRATORY / PANDEMIC CONDITIONS ......]
 [07 SEISMIC M4.0+] [08 NEAR-EARTH OBJECTS]
 ```
+
+That's the layout on wide screens (1400 CSS px and up, including kiosk mode on a TV). There the map shrinks to the height of the weather and alerts tiles. Narrower screens show two columns with the map full width, and phones show one column.
 
 ## Tiles
 
