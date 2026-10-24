@@ -14,13 +14,25 @@
     diseaseSh: "https://disease.sh/v3/covid-19",
     usgs: "https://earthquake.usgs.gov/fdsnws/event/1/query",
     neoFeed: "https://api.nasa.gov/neo/rest/v1/feed",
+    weather: "https://api.open-meteo.com/v1/forecast",
+    airQuality: "https://air-quality-api.open-meteo.com/v1/air-quality",
+    nwsAlerts: "https://api.weather.gov/alerts/active",
+    fema: "https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries",
   };
 
   const REFRESH_MS = {
     quake: 5 * 60 * 1000,
     neo: 60 * 60 * 1000,
     health: 60 * 60 * 1000,
+    weather: 15 * 60 * 1000,
+    alerts: 3 * 60 * 1000,
   };
+
+  // URL options: ?kiosk  ?lat=..&lon=..  ?units=metric|imperial
+  const URLQ = new URLSearchParams(location.search);
+
+  // Countries/territories that use Fahrenheit and are covered by NWS alerts.
+  const US_CODES = ["US", "PR", "GU", "VI", "AS", "MP"];
 
   const LUNAR_KM = 384400;
 
@@ -123,7 +135,7 @@
     });
   }
 
-  // ---------- 02: system / network ----------
+  // ---------- 05: system / network ----------
 
   function parseUA(ua) {
     const browsers = [
@@ -213,7 +225,7 @@
     return ipGeo;
   }
 
-  // ---------- 01: location ----------
+  // ---------- 04: location ----------
 
   function getBrowserPosition() {
     return new Promise((resolve, reject) => {
@@ -229,27 +241,34 @@
 
   async function loadLocation(ipGeoPromise) {
     let loc = null;
-    try {
-      log("requesting geolocation fix…");
-      const pos = await getBrowserPosition();
-      loc = {
-        lat: pos.coords.latitude,
-        lon: pos.coords.longitude,
-        accuracy: pos.coords.accuracy,
-        source: "GPS/Wi-Fi (Geolocation API)",
-      };
-      log(`geolocation fix ±${Math.round(loc.accuracy)} m`, "ok");
-    } catch (e) {
-      log(`geolocation: ${e.message} — falling back to IP geolocation`, "warn");
-      const ipGeo = await ipGeoPromise;
-      if (ipGeo?.latitude && ipGeo?.longitude) {
+    const qLat = parseFloat(URLQ.get("lat"));
+    const qLon = parseFloat(URLQ.get("lon"));
+    if (Math.abs(qLat) <= 90 && Math.abs(qLon) <= 180) {
+      loc = { lat: qLat, lon: qLon, accuracy: null, source: "manual (?lat=&lon= in URL)" };
+      log(`location pinned by URL: ${qLat}, ${qLon}`, "ok");
+    } else {
+      try {
+        log("requesting geolocation fix…");
+        const pos = await getBrowserPosition();
         loc = {
-          lat: Number(ipGeo.latitude),
-          lon: Number(ipGeo.longitude),
-          accuracy: null,
-          source: "IP geolocation (approximate)",
-          fallback: { city: ipGeo.city, state: ipGeo.region, country: ipGeo.country, countryCode: ipGeo.country_code },
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          source: "GPS/Wi-Fi (Geolocation API)",
         };
+        log(`geolocation fix ±${Math.round(loc.accuracy)} m`, "ok");
+      } catch (e) {
+        log(`geolocation: ${e.message} — falling back to IP geolocation`, "warn");
+        const ipGeo = await ipGeoPromise;
+        if (ipGeo?.latitude && ipGeo?.longitude) {
+          loc = {
+            lat: Number(ipGeo.latitude),
+            lon: Number(ipGeo.longitude),
+            accuracy: null,
+            source: "IP geolocation (approximate)",
+            fallback: { city: ipGeo.city, state: ipGeo.region, country: ipGeo.country, countryCode: ipGeo.country_code },
+          };
+        }
       }
     }
 
@@ -295,7 +314,322 @@
     return loc;
   }
 
-  // ---------- 03: CDC / pandemic ----------
+  // ---------- 01: weather ----------
+
+  // WMO weather interpretation codes used by Open-Meteo -> [label, icon kind]
+  const WMO = {
+    0: ["CLEAR", "sun"], 1: ["MAINLY CLEAR", "sun"], 2: ["PARTLY CLOUDY", "part"], 3: ["OVERCAST", "cloud"],
+    45: ["FOG", "fog"], 48: ["RIME FOG", "fog"],
+    51: ["LIGHT DRIZZLE", "rain"], 53: ["DRIZZLE", "rain"], 55: ["HEAVY DRIZZLE", "rain"],
+    56: ["FREEZING DRIZZLE", "sleet"], 57: ["HEAVY FREEZING DRIZZLE", "sleet"],
+    61: ["LIGHT RAIN", "rain"], 63: ["RAIN", "rain"], 65: ["HEAVY RAIN", "rain"],
+    66: ["FREEZING RAIN", "sleet"], 67: ["HEAVY FREEZING RAIN", "sleet"],
+    71: ["LIGHT SNOW", "snow"], 73: ["SNOW", "snow"], 75: ["HEAVY SNOW", "snow"], 77: ["SNOW GRAINS", "snow"],
+    80: ["RAIN SHOWERS", "rain"], 81: ["RAIN SHOWERS", "rain"], 82: ["VIOLENT RAIN SHOWERS", "rain"],
+    85: ["SNOW SHOWERS", "snow"], 86: ["HEAVY SNOW SHOWERS", "snow"],
+    95: ["THUNDERSTORM", "storm"], 96: ["THUNDERSTORM + HAIL", "storm"], 99: ["THUNDERSTORM + HEAVY HAIL", "storm"],
+  };
+
+  const CLOUD = ["     .-.     ", "    (   ).   ", "   (___(__)  "];
+  const WX_ICONS = {
+    sun: ["    \\   /    ", "     .-.     ", "  - (   ) -  ", "     `-'     ", "    /   \\    "],
+    moon: ["      _      ", "    ,' )     ", "   (  (      ", "    `._)     ", "             "],
+    part: ["   \\  /      ", ' _ /"".-.    ', "   \\_(   ).  ", "   /(___(__) ", "             "],
+    cloud: ["             ", "     .--.    ", "  .-(    ).  ", " (___.__)__) ", "             "],
+    fog: ["             ", " _ - _ - _ - ", "  _ - _ - _  ", " _ - _ - _ - ", "             "],
+    rain: [...CLOUD, "    / / / /  ", "   / / / /   "],
+    sleet: [...CLOUD, "    / * / *  ", "   * / * /   "],
+    snow: [...CLOUD, "    *  *  *  ", "   *  *  *   "],
+    storm: [...CLOUD, "    _/ / _/  ", "    /  /  /  "],
+  };
+  const WX_SHORT = { sun: "SUN", moon: "CLR", part: "P/CLD", cloud: "CLDY", fog: "FOG", rain: "RAIN", sleet: "ICE", snow: "SNOW", storm: "TSTM" };
+
+  const COMPASS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+  const compass = (deg) => COMPASS[Math.round((deg % 360) / 22.5) % 16];
+
+  // Unicode block sparkline, e.g. ▁▂▄▆█
+  function spark(values) {
+    const bars = "▁▂▃▄▅▆▇█";
+    const nums = values.filter((v) => v != null);
+    const lo = Math.min(...nums);
+    const hi = Math.max(...nums);
+    return values.map((v) => (v == null ? " " : bars[Math.round(((v - lo) / (hi - lo || 1)) * (bars.length - 1))])).join("");
+  }
+
+  function aqiCategory(aqi) {
+    if (aqi == null) return ["--", ""];
+    if (aqi <= 50) return ["GOOD", ""];
+    if (aqi <= 100) return ["MODERATE", ""];
+    if (aqi <= 150) return ["UNHEALTHY (SENSITIVE)", "warn"];
+    if (aqi <= 200) return ["UNHEALTHY", "alert"];
+    if (aqi <= 300) return ["VERY UNHEALTHY", "alert"];
+    return ["HAZARDOUS", "alert"];
+  }
+
+  function unitsFor(loc) {
+    const u = URLQ.get("units");
+    if (u === "metric" || u === "imperial") return u;
+    return US_CODES.includes(loc?.countryCode) ? "imperial" : "metric";
+  }
+
+  async function loadWeather(locPromise) {
+    const loc = await locPromise;
+    if (!loc) {
+      setBody("weather-body", errBox("no location — weather unavailable"));
+      return;
+    }
+    const imperial = unitsFor(loc) === "imperial";
+    const params = new URLSearchParams({
+      latitude: loc.lat.toFixed(4),
+      longitude: loc.lon.toFixed(4),
+      current: "temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,cloud_cover,pressure_msl,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
+      hourly: "temperature_2m,precipitation_probability",
+      daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,uv_index_max",
+      timezone: "auto",
+      forecast_days: "5",
+      temperature_unit: imperial ? "fahrenheit" : "celsius",
+      wind_speed_unit: imperial ? "mph" : "kmh",
+      precipitation_unit: imperial ? "inch" : "mm",
+    });
+    const aqParams = new URLSearchParams({ latitude: loc.lat.toFixed(4), longitude: loc.lon.toFixed(4), current: "us_aqi,pm2_5", timezone: "auto" });
+
+    try {
+      const [wx, aq] = await Promise.all([
+        fetchJSON(`${API.weather}?${params}`),
+        fetchJSON(`${API.airQuality}?${aqParams}`).catch((e) => { log(`open-meteo air quality: ${e.message}`, "warn"); return null; }),
+      ]);
+      alertState.aq = aq?.current ?? null;
+      renderAlerts();
+
+      const cur = wx.current;
+      const u = wx.current_units;
+      const deg = u.temperature_2m; // "°F" / "°C"
+      const [label, kindRaw] = WMO[cur.weather_code] || ["UNKNOWN", "cloud"];
+      const kind = kindRaw === "sun" && !cur.is_day ? "moon" : kindRaw;
+      const iconCls = kind === "sun" ? "warn" : kind === "storm" ? "alert" : "";
+
+      // Next 24 hours from the current hour.
+      const hourStart = wx.hourly.time.findIndex((t) => t >= cur.time.slice(0, 13) + ":00");
+      const from = Math.max(0, hourStart);
+      const every2h = (_, i) => i % 2 === 0;
+      const temps = wx.hourly.temperature_2m.slice(from, from + 24).filter(every2h);
+      const pops = wx.hourly.precipitation_probability.slice(from, from + 24).filter(every2h);
+
+      const d = wx.daily;
+      const days = d.time.slice(0, 5).map((t, i) => {
+        const [, k] = WMO[d.weather_code[i]] || ["", "cloud"];
+        const name = i === 0 ? "TODAY" : new Date(`${t}T12:00`).toLocaleDateString([], { weekday: "short" }).toUpperCase();
+        return `<tr><td>${name}</td><td>${WX_SHORT[k]}</td>` +
+          `<td>${fmtNum(d.temperature_2m_max[i])}° / ${fmtNum(d.temperature_2m_min[i])}°</td>` +
+          `<td>${fmtNum(d.precipitation_probability_max[i])}% precip</td></tr>`;
+      }).join("");
+
+      const [aqLabel, aqCls] = aqiCategory(alertState.aq?.us_aqi);
+      setBody(
+        "weather-body",
+        `<div class="wx-now"><pre class="wx-icon ${iconCls}">${WX_ICONS[kind].join("\n")}</pre>` +
+          `<div><div class="big">${fmtNum(cur.temperature_2m)}${esc(deg)}</div>` +
+          `<div>${label}</div><div class="dim">feels ${fmtNum(cur.apparent_temperature)}${esc(deg)}</div></div></div>` +
+          kv([
+            ["WIND", `${fmtNum(cur.wind_speed_10m)} ${imperial ? "mph" : "km/h"} ${compass(cur.wind_direction_10m)} · gusts ${fmtNum(cur.wind_gusts_10m)}`],
+            ["HUMIDITY", `${fmtNum(cur.relative_humidity_2m)}%`],
+            ["PRECIP NOW", `${fmtNum(cur.precipitation, imperial ? 2 : 1)} ${esc(u.precipitation)}`],
+            ["PRESSURE", `${fmtNum(cur.pressure_msl)} hPa`],
+            ["CLOUD", `${fmtNum(cur.cloud_cover)}%`],
+            ["UV MAX", fmtNum(d.uv_index_max[0], 1)],
+            ["AIR QUALITY", alertState.aq ? `<span class="${aqCls}">US AQI ${fmtNum(alertState.aq.us_aqi)} ${aqLabel}</span> · PM2.5 ${fmtNum(alertState.aq.pm2_5)} µg/m³` : '<span class="dim">n/a</span>'],
+            ["SUN", `↑ ${esc(d.sunrise[0].slice(11, 16))}  ↓ ${esc(d.sunset[0].slice(11, 16))} ${esc(wx.timezone_abbreviation || "")}`],
+            ["24H TEMP", `<span class="bar">${fmtNum(Math.min(...temps))}° ${spark(temps)} ${fmtNum(Math.max(...temps))}°</span>`],
+            ["24H RAIN", `<span class="bar">0% ${spark([0, ...pops, 100]).slice(1, -1)} ${fmtNum(Math.max(...pops))}%</span>`],
+          ]) +
+          `<br><div class="scroll-x"><table class="tt">${days}</table></div>` +
+          `<div class="src">src: open-meteo.com (forecast + air quality) · updated ${new Date().toLocaleTimeString([], { hour12: false })}</div>`
+      );
+      log(`weather: ${fmtNum(cur.temperature_2m)}${deg} ${label}`, "ok");
+    } catch (e) {
+      log(`open-meteo: ${e.message}`, "err");
+      setBody("weather-body", errBox(`weather request failed: ${e.message}`));
+    }
+  }
+
+  // ---------- 02: local alerts / emergencies ----------
+
+  // undefined = loading, null = unavailable, [] = none
+  const alertState = { loc: undefined, nws: undefined, nwsError: null, nearby: undefined, fema: undefined, aq: undefined };
+  const NEARBY_KM = 300;
+  const SEVERITY_RANK = { Extreme: 4, Severe: 3, Moderate: 2, Minor: 1, Unknown: 0 };
+  const sevClass = (s) => (SEVERITY_RANK[s] >= 3 ? "alert" : SEVERITY_RANK[s] === 2 ? "warn" : "");
+  const shortTime = (iso) =>
+    iso ? new Date(iso).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) : "--";
+
+  async function loadNwsAlerts(loc) {
+    if (!US_CODES.includes(loc.countryCode)) {
+      alertState.nws = null;
+      return;
+    }
+    try {
+      // Plain GET with no custom headers: setting User-Agent from a browser breaks the CORS preflight.
+      const data = await fetchJSON(`${API.nwsAlerts}?point=${loc.lat.toFixed(4)},${loc.lon.toFixed(4)}`);
+      alertState.nws = (data.features || [])
+        .map((f) => f.properties)
+        .filter((p) => p.status === "Actual")
+        .sort((a, b) => (SEVERITY_RANK[b.severity] ?? 0) - (SEVERITY_RANK[a.severity] ?? 0) || String(a.onset).localeCompare(String(b.onset)));
+      alertState.nwsError = null;
+      log(`nws: ${alertState.nws.length} active alert(s)`, alertState.nws.length ? "warn" : "ok");
+    } catch (e) {
+      alertState.nws = null;
+      alertState.nwsError = e.message;
+      log(`nws alerts: ${e.message}`, "err");
+    }
+  }
+
+  async function loadNearbyQuakes(loc) {
+    try {
+      const params = new URLSearchParams({
+        format: "geojson",
+        latitude: loc.lat.toFixed(3),
+        longitude: loc.lon.toFixed(3),
+        maxradiuskm: String(NEARBY_KM),
+        minmagnitude: "2.5",
+        starttime: new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 19),
+        orderby: "time",
+        limit: "200",
+      });
+      const data = await fetchJSON(`${API.usgs}?${params}`);
+      alertState.nearby = (data.features || []).map((f) => ({
+        mag: f.properties.mag,
+        place: f.properties.place,
+        time: f.properties.time,
+        km: haversineKm(loc.lat, loc.lon, f.geometry.coordinates[1], f.geometry.coordinates[0]),
+      }));
+    } catch (e) {
+      alertState.nearby = null;
+      log(`usgs nearby: ${e.message}`, "warn");
+    }
+  }
+
+  async function loadFema(loc) {
+    if (loc.countryCode !== "US" || !loc.stateCode) {
+      alertState.fema = null;
+      return;
+    }
+    try {
+      const since = new Date(Date.now() - 90 * 86400000).toISOString();
+      const filter = `state eq '${loc.stateCode}' and declarationDate ge '${since}'`;
+      const url = `${API.fema}?$filter=${encodeURIComponent(filter)}&$orderby=${encodeURIComponent("declarationDate desc")}&$top=500`;
+      const rows = (await fetchJSON(url)).DisasterDeclarationsSummaries || [];
+      // One row per designated county; group into one entry per disaster.
+      const county = (loc.county || "").replace(/\s+(County|Parish|Borough)$/i, "").toLowerCase();
+      const byNumber = new Map();
+      for (const r of rows) {
+        const d = byNumber.get(r.disasterNumber) || { ...r, counties: 0, local: false };
+        d.counties++;
+        if (county && (r.designatedArea || "").toLowerCase().startsWith(county)) d.local = true;
+        if (/statewide/i.test(r.designatedArea || "")) d.local = true;
+        byNumber.set(r.disasterNumber, d);
+      }
+      alertState.fema = [...byNumber.values()].sort((a, b) => b.local - a.local || String(b.declarationDate).localeCompare(String(a.declarationDate)));
+    } catch (e) {
+      alertState.fema = null;
+      log(`fema: ${e.message}`, "warn");
+    }
+  }
+
+  async function loadAlerts(locPromise) {
+    const loc = await locPromise;
+    alertState.loc = loc;
+    if (!loc) {
+      renderAlerts();
+      return;
+    }
+    await Promise.all([loadNwsAlerts(loc), loadNearbyQuakes(loc), loadFema(loc)]);
+    renderAlerts();
+  }
+
+  function renderBanner() {
+    const severe = (alertState.nws || []).filter((a) => SEVERITY_RANK[a.severity] >= 3);
+    const banner = $("alert-banner");
+    if (!severe.length) {
+      banner.hidden = true;
+      return;
+    }
+    banner.hidden = false;
+    banner.innerHTML = severe
+      .map((a) => `<span class="blink">!!</span> ${esc(a.event.toUpperCase())} <span class="dim-on-alert">until ${esc(shortTime(a.ends || a.expires))}</span>`)
+      .join("  ·  ");
+  }
+
+  function renderAlerts() {
+    const { loc, nws, nwsError, nearby, fema, aq } = alertState;
+    renderBanner();
+    if (loc === undefined) return;
+    if (!loc) {
+      setBody("alerts-body", errBox("no location — local alerts unavailable"));
+      return;
+    }
+    const isUS = US_CODES.includes(loc.countryCode);
+    const sections = [];
+
+    // Overall status line.
+    const severe = (nws || []).filter((a) => SEVERITY_RANK[a.severity] >= 3).length;
+    const aqBad = aq?.us_aqi > 100;
+    let status;
+    if (nws === undefined && isUS) status = '<span class="dim">checking…</span>';
+    else if (nws?.length) status = `<span class="${severe ? "alert" : "warn"}">${nws.length} ACTIVE ALERT${nws.length > 1 ? "S" : ""}${severe ? ` (${severe} SEVERE)` : ""}</span>`;
+    else if (aqBad) status = '<span class="warn">AIR QUALITY ADVISORY</span>';
+    else if (isUS && nws) status = "ALL CLEAR";
+    else status = '<span class="dim">NO OFFICIAL ALERT FEED</span>';
+    sections.push(`<div class="big">${status}</div>`);
+
+    // NWS watches / warnings / advisories (includes civil emergency messages relayed by NWS).
+    if (!isUS) {
+      sections.push('<div class="dim">&gt; NWS alerts cover the US and its territories only.</div>');
+    } else if (nws === undefined) {
+      sections.push('<div class="dim">&gt; querying weather.gov…</div>');
+    } else if (nws === null) {
+      sections.push(errBox(`NWS alerts unavailable: ${nwsError || "unknown error"}`));
+    } else if (!nws.length) {
+      sections.push("<div>&gt; no active NWS watches, warnings or advisories for this point</div>");
+    } else {
+      sections.push(
+        nws.slice(0, 6).map((a) =>
+          `<div class="alert-item ${sevClass(a.severity)}">` +
+            `<div><b>${esc(a.event.toUpperCase())}</b> <span class="dim">[${esc(a.severity)} · ${esc(a.urgency)}]</span></div>` +
+            `<div class="dim">${esc(shortTime(a.onset || a.effective))} → ${esc(shortTime(a.ends || a.expires))}</div>` +
+            (a.headline ? `<div>${esc(a.headline)}</div>` : "") +
+            (a.instruction ? `<div class="dim">&gt; ${esc(a.instruction.replace(/\s+/g, " ").slice(0, 280))}${a.instruction.length > 280 ? "…" : ""}</div>` : "") +
+          `</div>`
+        ).join("") + (nws.length > 6 ? `<div class="dim">+${nws.length - 6} more</div>` : "")
+      );
+    }
+
+    const rows = [];
+    if (aq) {
+      const [label, cls] = aqiCategory(aq.us_aqi);
+      rows.push(["AIR QUALITY", `<span class="${cls}">US AQI ${fmtNum(aq.us_aqi)} — ${label}</span>`]);
+    }
+    if (nearby === undefined) rows.push([`QUAKES ≤${NEARBY_KM} km`, '<span class="dim">checking…</span>']);
+    else if (nearby === null) rows.push([`QUAKES ≤${NEARBY_KM} km`, '<span class="dim">unavailable</span>']);
+    else if (!nearby.length) rows.push([`QUAKES ≤${NEARBY_KM} km`, "none M2.5+ in 7 days"]);
+    else {
+      const big = nearby.reduce((a, b) => (b.mag > a.mag ? b : a));
+      rows.push([`QUAKES ≤${NEARBY_KM} km`,
+        `${nearby.length}× M2.5+ in 7d · largest <span class="${big.mag >= 5 ? "alert" : big.mag >= 4 ? "warn" : ""}">M${fmtNum(big.mag, 1)}</span> ${esc(big.place || "")} (${fmtNum(big.km)} km, ${ago(big.time)})`]);
+    }
+    if (fema === undefined && isUS) rows.push(["FEMA (90d)", '<span class="dim">checking…</span>']);
+    else if (fema?.length) {
+      rows.push(["FEMA (90d)", fema.slice(0, 3).map((d) =>
+        `<div class="${d.local ? "warn" : ""}">${esc(d.declarationType)}-${esc(d.disasterNumber)} ${esc(d.incidentType)}: ${esc(d.declarationTitle)} · ${esc(String(d.declarationDate).slice(0, 10))}${d.local ? " · YOUR COUNTY" : ` · ${d.counties} area${d.counties > 1 ? "s" : ""}`}</div>`).join("")]);
+    } else if (fema) rows.push(["FEMA (90d)", `no disaster declarations in ${esc(loc.stateCode)}`]);
+    sections.push(kv(rows));
+
+    sections.push(
+      `<div class="src">src: ${isUS ? `NWS api.weather.gov (<a href="https://forecast.weather.gov/MapClick.php?lat=${loc.lat.toFixed(4)}&lon=${loc.lon.toFixed(4)}" target="_blank" rel="noopener">local forecast page ↗</a>) · OpenFEMA · ` : ""}USGS · open-meteo air quality · checked ${new Date().toLocaleTimeString([], { hour12: false })}</div>`
+    );
+    setBody("alerts-body", sections.join("<br>"));
+  }
+
+  // ---------- 06: CDC / pandemic ----------
 
   const PATHOGENS = [
     ["covid", "COVID-19"],
@@ -438,7 +772,7 @@
     );
   }
 
-  // ---------- 00: world grid ----------
+  // ---------- 03: world grid ----------
 
   const mapState = { loc: null, quakes: null };
 
@@ -585,7 +919,7 @@
     svg.addEventListener("click", onPoint);
   }
 
-  // ---------- 04: earthquakes ----------
+  // ---------- 07: earthquakes ----------
 
   const QUAKE_WINDOW_DAYS = 7;
 
@@ -645,7 +979,7 @@
     }
   }
 
-  // ---------- 05: near-earth objects ----------
+  // ---------- 08: near-earth objects ----------
 
   function getNasaKey() {
     try { return localStorage.getItem("nasa_api_key") || "DEMO_KEY"; } catch (_) { return "DEMO_KEY"; }
@@ -737,6 +1071,110 @@
     });
   }
 
+  // ---------- kiosk mode (hotel TV) ----------
+  // Big type, hidden cursor, screen kept awake, slow auto-scroll, small pixel shift
+  // against burn-in, and a periodic full reload to recover from stale state.
+
+  const kiosk = { on: false, wakeLock: null, timers: [], raf: 0, pos: 0, pauseUntil: 0 };
+  const KIOSK_RELOAD_MS = 6 * 60 * 60 * 1000;
+  const SCROLL_PX_PER_MS = 0.03; // ~30 px/s
+
+  async function requestWakeLock() {
+    if (!kiosk.on || !navigator.wakeLock || document.visibilityState !== "visible") return;
+    try {
+      kiosk.wakeLock = await navigator.wakeLock.request("screen");
+    } catch (e) {
+      log(`wake lock: ${e.message}`, "warn");
+    }
+  }
+
+  function applyKioskZoom() {
+    // Lay the page out as if the screen were ~1280px wide, then scale it up to fill the TV.
+    document.body.style.zoom = kiosk.on ? String(Math.min(3, Math.max(1, window.innerWidth / 1280))) : "";
+  }
+
+  // Scroll slowly to the bottom, hold 10 s, return to the top, hold 20 s, repeat.
+  function startAutoScroll() {
+    let last = performance.now();
+    kiosk.pos = window.scrollY;
+    kiosk.pauseUntil = last + 15000;
+    const step = (now) => {
+      if (!kiosk.on) return;
+      const dt = now - last;
+      last = now;
+      const max = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+      if (max > 4 && now >= kiosk.pauseUntil) {
+        kiosk.pos = Math.min(max, kiosk.pos + dt * SCROLL_PX_PER_MS);
+        window.scrollTo(0, kiosk.pos);
+        if (kiosk.pos >= max) {
+          kiosk.pos = 0;
+          kiosk.pauseUntil = now + 30000;
+          setTimeout(() => kiosk.on && window.scrollTo({ top: 0, behavior: "smooth" }), 10000);
+        }
+      }
+      kiosk.raf = requestAnimationFrame(step);
+    };
+    kiosk.raf = requestAnimationFrame(step);
+  }
+
+  function goFullscreen() {
+    if (kiosk.on && !document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
+  }
+
+  function setKiosk(on) {
+    kiosk.on = on;
+    document.documentElement.classList.toggle("kiosk", on);
+    kiosk.timers.forEach(clearInterval);
+    kiosk.timers = [];
+    cancelAnimationFrame(kiosk.raf);
+    applyKioskZoom();
+
+    // Keep ?kiosk in the URL so a reload (or a bookmark) stays in kiosk mode.
+    const q = new URLSearchParams(location.search);
+    q.delete("kiosk");
+    const rest = q.toString();
+    const search = on ? `?kiosk${rest ? `&${rest}` : ""}` : rest ? `?${rest}` : "";
+    history.replaceState(null, "", location.pathname + search + location.hash);
+
+    if (!on) {
+      kiosk.wakeLock?.release().catch(() => {});
+      kiosk.wakeLock = null;
+      $("crt").style.transform = "";
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      log("kiosk mode off", "ok");
+      return;
+    }
+    requestWakeLock();
+    startAutoScroll();
+    kiosk.timers.push(
+      // Nudge the whole screen a few pixels now and then to avoid burn-in.
+      setInterval(() => {
+        const dx = Math.round(Math.random() * 6 - 3);
+        const dy = Math.round(Math.random() * 6 - 3);
+        $("crt").style.transform = `translate(${dx}px, ${dy}px)`;
+      }, 3 * 60 * 1000),
+      setInterval(() => location.reload(), KIOSK_RELOAD_MS)
+    );
+    log("kiosk mode on (K to exit) — click or press any key for fullscreen", "ok");
+  }
+
+  function initKiosk() {
+    window.addEventListener("resize", applyKioskZoom);
+    document.addEventListener("visibilitychange", requestWakeLock);
+    // Manual scrolling pauses the auto-scroll for a minute.
+    const hold = () => {
+      kiosk.pauseUntil = performance.now() + 60000;
+      kiosk.pos = window.scrollY;
+    };
+    window.addEventListener("wheel", hold, { passive: true });
+    window.addEventListener("touchstart", hold, { passive: true });
+    // Fullscreen needs a user gesture, so take the first click/key in kiosk mode.
+    document.addEventListener("click", goFullscreen);
+    document.addEventListener("keydown", goFullscreen);
+    $("btn-kiosk").addEventListener("click", () => setKiosk(!kiosk.on));
+    if (URLQ.has("kiosk")) setKiosk(true);
+  }
+
   // ---------- boot ----------
 
   let locPromise = null;
@@ -746,6 +1184,8 @@
     const ipGeoPromise = loadSystem().catch((e) => { log(`system: ${e.message}`, "err"); return null; });
     locPromise = loadLocation(ipGeoPromise).catch((e) => { log(`location: ${e.message}`, "err"); return null; });
     locPromise.then((loc) => { mapState.loc = loc; renderMap(); });
+    loadWeather(locPromise);
+    loadAlerts(locPromise);
     loadHealth(locPromise).catch((e) => setBody("health-body", errBox(e.message)));
     loadQuake(locPromise);
     loadNeo();
@@ -756,6 +1196,7 @@
     startClock();
     initTheme();
     initNasaKeyForm();
+    initKiosk();
     renderMap();
     refreshAll();
 
@@ -764,11 +1205,17 @@
       if (e.target.closest("input, textarea") || e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === "r" || e.key === "R") refreshAll();
       if (e.key === "t" || e.key === "T") $("btn-theme").click();
+      if (e.key === "k" || e.key === "K") {
+        setKiosk(!kiosk.on);
+        goFullscreen();
+      }
     });
 
     setInterval(() => loadQuake(locPromise), REFRESH_MS.quake);
     setInterval(loadNeo, REFRESH_MS.neo);
     setInterval(() => loadHealth(locPromise), REFRESH_MS.health);
+    setInterval(() => loadWeather(locPromise), REFRESH_MS.weather);
+    setInterval(() => loadAlerts(locPromise), REFRESH_MS.alerts);
   }
 
   boot();

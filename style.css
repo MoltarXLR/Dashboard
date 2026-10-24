@@ -141,6 +141,29 @@ table.tt td { padding: 2px 8px 2px 0; vertical-align: top; white-space: nowrap; 
 }
 .health-grid > div { border: 1px dashed var(--faint); padding: 8px; }
 
+/* Severe-alert banner (sticky so it stays visible while kiosk mode auto-scrolls) */
+.banner {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: 10px 0 0;
+  padding: 6px 12px;
+  background: var(--alert);
+  color: #000;
+  font-weight: bold;
+  letter-spacing: 1px;
+  text-shadow: none;
+}
+.banner .blink { animation: blink 1s steps(1) infinite; }
+.banner .dim-on-alert { font-weight: normal; }
+
+/* Weather */
+.wx-now { display: flex; gap: 16px; align-items: center; margin-bottom: 10px; }
+.wx-icon { margin: 0; font: inherit; line-height: 1.15; white-space: pre; }
+
+/* Local alerts */
+.alert-item { border-left: 3px solid currentColor; padding: 2px 0 2px 8px; margin: 8px 0; }
+
 /* World grid */
 .worldmap { display: block; width: 100%; max-width: 1000px; height: auto; margin: 0 auto; cursor: crosshair; }
 .worldmap .land { fill: var(--fg); }
@@ -194,6 +217,11 @@ table.tt.legend td:first-child { white-space: nowrap; }
   .big { font-size: 22px; }
 }
 
+/* Kiosk / hotel-TV mode: zoom is set from JS; hide the pointer and controls */
+html.kiosk, html.kiosk * { cursor: none !important; }
+html.kiosk .footer .keyform, html.kiosk .actions { display: none; }
+html.kiosk .bootlog { max-height: 4.5em; }
+
 @media (prefers-reduced-motion: reduce) {
-  .cursor, .worldmap .ring.ping { animation: none; }
+  .cursor, .worldmap .ring.ping, .banner .blink { animation: none; }
 }
