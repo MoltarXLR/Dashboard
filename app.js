@@ -34,6 +34,22 @@
   // Countries/territories that use Fahrenheit and are covered by NWS alerts.
   const US_CODES = ["US", "PR", "GU", "VI", "AS", "MP"];
 
+  // Live video channels (YouTube channel IDs). The embed shows whatever the channel is
+  // streaming live right now; if it isn't live, YouTube shows an "unavailable" screen.
+  // Edit freely: keys 1-9 follow this order.
+  const VIDEO_CHANNELS = [
+    { key: "nhk", name: "NHK WORLD", channel: "UCSPEjw8F2nQDtmUKPFNF7_A", note: "live on YouTube only at times" },
+    { key: "bbc", name: "BBC NEWS", channel: "UC16niRr50-MSBwiO3YDb3RA", note: "live on YouTube only for some events" },
+    { key: "abc", name: "ABC NEWS LIVE", channel: "UCBi2mrWuNuyYy4gbM6fU18Q" },
+    { key: "nbc", name: "NBC NEWS NOW", channel: "UCeY0bbntWzzVIaj2z3QigXg" },
+    { key: "cbs", name: "CBS NEWS 24/7", channel: "UC8p1vwvWtl6T73JiExfWs1g" },
+    { key: "livenow", name: "LIVENOW FOX", channel: "UCJg9wBPyKMNA5sRDnvzmkdg" },
+    { key: "sky", name: "SKY NEWS", channel: "UCoMdktPbSTixAyNGwb-UYkQ" },
+    { key: "dw", name: "DW NEWS", channel: "UCknLrEdhRCp1aegoMqRaCZg" },
+    { key: "aje", name: "AL JAZEERA", channel: "UCNye-wNBqNL5ZzHSJj3l8Bg" },
+  ];
+  const DEFAULT_CHANNEL = "abc";
+
   const LUNAR_KM = 384400;
 
   // ---------- helpers ----------
@@ -135,7 +151,7 @@
     });
   }
 
-  // ---------- 05: system / network ----------
+  // ---------- 06: system / network ----------
 
   function parseUA(ua) {
     const browsers = [
@@ -225,7 +241,7 @@
     return ipGeo;
   }
 
-  // ---------- 04: location ----------
+  // ---------- 05: location ----------
 
   function getBrowserPosition() {
     return new Promise((resolve, reject) => {
@@ -629,7 +645,7 @@
     setBody("alerts-body", sections.join("<br>"));
   }
 
-  // ---------- 06: CDC / pandemic ----------
+  // ---------- 07: CDC / pandemic ----------
 
   const PATHOGENS = [
     ["covid", "COVID-19"],
@@ -919,7 +935,7 @@
     svg.addEventListener("click", onPoint);
   }
 
-  // ---------- 07: earthquakes ----------
+  // ---------- 08: earthquakes ----------
 
   const QUAKE_WINDOW_DAYS = 7;
 
@@ -979,7 +995,7 @@
     }
   }
 
-  // ---------- 08: near-earth objects ----------
+  // ---------- 09: near-earth objects ----------
 
   function getNasaKey() {
     try { return localStorage.getItem("nasa_api_key") || "DEMO_KEY"; } catch (_) { return "DEMO_KEY"; }
@@ -1069,6 +1085,111 @@
       log(`nasa key ${v ? "updated" : "reset to DEMO_KEY"}`, "ok");
       loadNeo();
     });
+  }
+
+  // ---------- 04: live video ----------
+
+  const video = { current: null, muted: true, custom: null };
+
+  // Accepts a YouTube URL (watch, youtu.be, /live/, /embed/, /shorts/, /channel/), a channel ID or a video ID.
+  function parseYouTube(input) {
+    const v = input.trim();
+    let m;
+    if ((m = v.match(/(?:channel\/)?(UC[\w-]{22})(?![\w-])/))) return { channel: m[1] };
+    if ((m = v.match(/(?:v=|youtu\.be\/|\/live\/|\/embed\/|\/shorts\/)([\w-]{11})(?![\w-])/))) return { video: m[1] };
+    if (/^[\w-]{11}$/.test(v)) return { video: v };
+    return null;
+  }
+
+  function allChannels() {
+    return video.custom ? [...VIDEO_CHANNELS, { key: "custom", name: "CUSTOM", ...video.custom }] : VIDEO_CHANNELS;
+  }
+
+  function embedUrl(ch) {
+    const q = new URLSearchParams({ autoplay: "1", mute: video.muted ? "1" : "0", playsinline: "1", rel: "0", enablejsapi: "1", origin: location.origin });
+    if (ch.video) return `https://www.youtube.com/embed/${ch.video}?${q}`;
+    q.set("channel", ch.channel);
+    return `https://www.youtube.com/embed/live_stream?${q}`;
+  }
+
+  const watchUrl = (ch) => (ch.video ? `https://www.youtube.com/watch?v=${ch.video}` : `https://www.youtube.com/channel/${ch.channel}/live`);
+
+  // Commands to the embedded player (needs enablejsapi=1).
+  function playerCommand(func) {
+    $("video-frame").querySelector("iframe")?.contentWindow?.postMessage(JSON.stringify({ event: "command", func, args: [] }), "*");
+  }
+
+  function toggleMute() {
+    if (!video.current) return;
+    video.muted = !video.muted;
+    playerCommand(video.muted ? "mute" : "unMute");
+    renderVideoStatus();
+  }
+
+  function renderVideoStatus() {
+    const ch = allChannels().find((c) => c.key === video.current);
+    $("video-now").textContent = ch ? `// ${ch.name}` : "// OFF";
+    $("video-status").innerHTML = ch
+      ? `&gt; ${esc(ch.name)} · ${video.muted ? "MUTED — press M for sound" : "SOUND ON — M to mute"} · ` +
+        `<a href="${esc(watchUrl(ch))}" target="_blank" rel="noopener">open on YouTube ↗</a>` +
+        `<br><span class="dim">${ch.note ? `${esc(ch.note)}. ` : ""}A blank or "unavailable" screen means the channel isn't streaming now: pick another.</span>`
+      : '&gt; video off · press 1–9 or pick a channel';
+    document.querySelectorAll("#video-channels button").forEach((b) => b.classList.toggle("on", b.dataset.key === (video.current || "off")));
+  }
+
+  function selectChannel(key) {
+    const ch = allChannels().find((c) => c.key === key);
+    video.current = ch ? ch.key : null;
+    try { localStorage.setItem("sitrep_video", video.current || "off"); } catch (_) {}
+    const frame = $("video-frame");
+    if (!ch) {
+      frame.innerHTML = '<div class="video-off">[ VIDEO OFF ]</div>';
+    } else {
+      frame.innerHTML =
+        `<iframe src="${esc(embedUrl(ch))}" title="${esc(ch.name)} live" ` +
+        `allow="autoplay; encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
+      log(`video: ${ch.name}`, "ok");
+    }
+    renderVideoStatus();
+  }
+
+  function renderChannelButtons() {
+    const buttons = allChannels().map((c, i) =>
+      `<button type="button" data-key="${esc(c.key)}" title="${esc(c.name)}">${i < 9 ? `[${i + 1}]` : ""}${esc(c.name)}</button>`);
+    buttons.push('<button type="button" data-key="off" title="Stop video">[0]OFF</button>');
+    $("video-channels").innerHTML = buttons.join("");
+  }
+
+  function initVideo() {
+    try {
+      const saved = JSON.parse(localStorage.getItem("sitrep_video_custom") || "null");
+      if (saved && (saved.channel || saved.video)) video.custom = saved;
+    } catch (_) {}
+    renderChannelButtons();
+    $("video-channels").addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-key]");
+      if (b) selectChannel(b.dataset.key);
+    });
+    $("video-custom-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const parsed = parseYouTube($("video-custom").value);
+      if (!parsed) {
+        log("video: paste a YouTube video/live URL or a channel ID (UC…); @handles can't be resolved without an API key", "warn");
+        return;
+      }
+      video.custom = parsed;
+      $("video-custom").blur();
+      try { localStorage.setItem("sitrep_video_custom", JSON.stringify(parsed)); } catch (_) {}
+      renderChannelButtons();
+      selectChannel("custom");
+    });
+
+    // ?channel=nhk picks a channel; otherwise the last one used, else the default.
+    let start = URLQ.get("channel");
+    if (!start) {
+      try { start = localStorage.getItem("sitrep_video"); } catch (_) {}
+    }
+    selectChannel(allChannels().some((c) => c.key === start) || start === "off" ? start : DEFAULT_CHANNEL);
   }
 
   // ---------- kiosk mode (hotel TV) ----------
@@ -1199,6 +1320,7 @@
     initTheme();
     initNasaKeyForm();
     initKiosk();
+    initVideo();
     renderMap();
     refreshAll();
 
@@ -1207,6 +1329,9 @@
       if (e.target.closest("input, textarea") || e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === "r" || e.key === "R") refreshAll();
       if (e.key === "t" || e.key === "T") $("btn-theme").click();
+      if (e.key === "m" || e.key === "M") toggleMute();
+      if (e.key === "0") selectChannel("off");
+      else if (/^[1-9]$/.test(e.key) && allChannels()[Number(e.key) - 1]) selectChannel(allChannels()[Number(e.key) - 1].key);
       if (e.key === "k" || e.key === "K") {
         setKiosk(!kiosk.on);
         goFullscreen();

@@ -7,9 +7,10 @@ A retro, terminal-style situational dashboard. Plain HTML/CSS/JS: no build step,
 ```
 [!! SEVERE-ALERT BANNER (only when one is active) !!]
 [01 WEATHER] [02 LOCAL ALERTS] [03 WORLD GRID ........]
-[04 LOCATION ...........] [05 SYSTEM / NETWORK .....]
-[06 RESPIRATORY / PANDEMIC CONDITIONS ......]
-[07 SEISMIC M4.0+] [08 NEAR-EARTH OBJECTS]
+[04 LIVE VIDEO .........] [05 LOCATION ............]
+[                       ] [06 SYSTEM / NETWORK .....]
+[07 RESPIRATORY / PANDEMIC CONDITIONS ......]
+[08 SEISMIC M4.0+] [09 NEAR-EARTH OBJECTS]
 ```
 
 That's the layout on wide screens (1400 CSS px and up, including kiosk mode on a TV). There the map shrinks to the height of the weather and alerts tiles. Narrower screens show two columns with the map full width, and phones show one column.
@@ -20,12 +21,13 @@ That's the layout on wide screens (1400 CSS px and up, including kiosk mode on a
 |---|------|--------|
 | 01 | Current conditions with ASCII icon, feels-like, wind/gusts, humidity, pressure, UV, US AQI + PM2.5, sunrise/sunset, 24 h temperature and rain sparklines, 5-day outlook. °F/mph in the US, °C/km/h elsewhere. | [Open-Meteo](https://open-meteo.com/) forecast + air-quality APIs (free, no key, worldwide, non-commercial use) |
 | 02 | Local alerts: active NWS watches/warnings/advisories for your exact point (including civil emergencies NWS relays), air-quality advisory, M2.5+ earthquakes within 300 km in the past 7 days, and FEMA disaster declarations in your state in the last 90 days (flagged if your county is included). Severe/Extreme NWS alerts also raise a sticky red banner at the top of the page. | [NWS api.weather.gov](https://www.weather.gov/documentation/services-web-api) (US and territories only), [OpenFEMA](https://www.fema.gov/about/openfema/api), USGS, Open-Meteo |
-| 03 | Dot-matrix world map (60×30, each dot ≈ 6° lon × 4.8° lat, 84°N to 60°S). **Cyan** = your device, **red** = latest M4.0+ quake, **magenta** = the top two earthquake hotspots (densest clusters of M4.0+ events in the past 7 days), dashed red ring = USGS tsunami flag. Hover or tap a dot to read its coordinates. | Land mask from [Natural Earth](https://www.naturalearthdata.com/) 1:110m via `world-atlas`, pre-generated into `worldmask.js`. Quakes from USGS (same request as tile 07). |
-| 04 | Device location (lat/lon, accuracy, city/county/state) | Browser [Geolocation API](https://developer.mozilla.org/docs/Web/API/Geolocation_API), reverse geocoded with [BigDataCloud](https://www.bigdatacloud.com/free-api/free-reverse-geocode-to-city-api). Falls back to IP geolocation if permission is denied. |
-| 05 | Browser, OS, public IP, ISP, screen, cores, connection | `navigator` / User-Agent Client Hints, [ipify](https://www.ipify.org/), [GeoJS](https://www.geojs.io/) |
-| 06 | % of ER visits for COVID-19, flu, and RSV, with CDC trend direction, for your county, your state, and the US | [CDC NSSP ED Visit Trajectories](https://data.cdc.gov/Public-Health-Surveillance/NSSP-Emergency-Department-Visit-Trajectories-by-St/rdmq-nq56) (`data.cdc.gov` Socrata API). Outside the US, or if the CDC is unreachable, it shows general COVID-19 totals from [disease.sh](https://disease.sh/). |
-| 07 | Most recent earthquake of magnitude 4.0 or higher worldwide: location, depth, distance from you, tsunami flag, plus the previous few | [USGS FDSN Event API](https://earthquake.usgs.gov/fdsnws/event/1/) |
-| 08 | Asteroids making close approaches to Earth over the next 7 days: miss distance, size, speed, hazard flag | [NASA NeoWs](https://api.nasa.gov/) |
+| 03 | Dot-matrix world map (60×30, each dot ≈ 6° lon × 4.8° lat, 84°N to 60°S). **Cyan** = your device, **red** = latest M4.0+ quake, **magenta** = the top two earthquake hotspots (densest clusters of M4.0+ events in the past 7 days), dashed red ring = USGS tsunami flag. Hover or tap a dot to read its coordinates. | Land mask from [Natural Earth](https://www.naturalearthdata.com/) 1:110m via `world-atlas`, pre-generated into `worldmask.js`. Quakes from USGS (same request as tile 08). |
+| 04 | Live news video with channel buttons: NHK WORLD, BBC News, ABC News Live, NBC News NOW, CBS News 24/7, LiveNOW from FOX, Sky News, DW News, Al Jazeera English, plus one custom channel you paste in. Starts muted. | YouTube embeds (`embed/live_stream?channel=…` shows whatever the channel is streaming live right now) |
+| 05 | Device location (lat/lon, accuracy, city/county/state) | Browser [Geolocation API](https://developer.mozilla.org/docs/Web/API/Geolocation_API), reverse geocoded with [BigDataCloud](https://www.bigdatacloud.com/free-api/free-reverse-geocode-to-city-api). Falls back to IP geolocation if permission is denied. |
+| 06 | Browser, OS, public IP, ISP, screen, cores, connection | `navigator` / User-Agent Client Hints, [ipify](https://www.ipify.org/), [GeoJS](https://www.geojs.io/) |
+| 07 | % of ER visits for COVID-19, flu, and RSV, with CDC trend direction, for your county, your state, and the US | [CDC NSSP ED Visit Trajectories](https://data.cdc.gov/Public-Health-Surveillance/NSSP-Emergency-Department-Visit-Trajectories-by-St/rdmq-nq56) (`data.cdc.gov` Socrata API). Outside the US, or if the CDC is unreachable, it shows general COVID-19 totals from [disease.sh](https://disease.sh/). |
+| 08 | Most recent earthquake of magnitude 4.0 or higher worldwide: location, depth, distance from you, tsunami flag, plus the previous few | [USGS FDSN Event API](https://earthquake.usgs.gov/fdsnws/event/1/) |
+| 09 | Asteroids making close approaches to Earth over the next 7 days: miss distance, size, speed, hazard flag | [NASA NeoWs](https://api.nasa.gov/) |
 
 ## Run it
 
@@ -60,6 +62,7 @@ node gen-worldmask.mjs 30 30        # args: cols rows [latTop=84] [latBottom=-60
 - `R` or **[R]EFRESH**: reload every feed
 - `T` or **[T]HEME**: toggle green and amber phosphor
 - `K` or **[K]IOSK**: toggle hotel-TV kiosk mode (see below)
+- `1`–`9`: switch video channel · `0`: video off · `M`: mute / unmute
 - Auto-refresh: local alerts every 3 minutes; earthquakes every 5; weather every 15; NEO and CDC data hourly
 
 ### URL options
@@ -69,6 +72,7 @@ node gen-worldmask.mjs 30 30        # args: cols rows [latTop=84] [latBottom=-60
 | `?kiosk` | Start in kiosk mode |
 | `?lat=40.7580&lon=-73.9855` | Pin the location instead of asking the browser (handy when IP geolocation is wrong on hotel Wi-Fi) |
 | `?units=metric` / `?units=imperial` | Override the automatic unit choice |
+| `?channel=nhk` | Start the video on a channel: `nhk`, `bbc`, `abc`, `nbc`, `cbs`, `livenow`, `sky`, `dw`, `aje`, `custom` or `off` (otherwise the last one used, default `abc`) |
 
 Options combine, e.g. `https://moltarxlr.github.io/Dashboard/?kiosk&units=imperial`.
 
@@ -93,6 +97,14 @@ Setup on the mini PC:
    (Without `--kiosk`, click or press any key once to go fullscreen.)
 
 If the location looks wrong, the mini PC probably has no Wi-Fi positioning and fell back to the hotel's IP address, which can be in another city. Add `&lat=..&lon=..` for the hotel to the URL.
+
+## Live video
+
+- The player shows whatever each channel is streaming live on YouTube at that moment. ABC News Live, NBC News NOW, CBS News 24/7, LiveNOW from FOX, Sky News, DW and Al Jazeera usually run around the clock. **NHK WORLD and BBC News only stream live on YouTube at times** (BBC News' 24-hour channel is otherwise UK-only on iPlayer). If a channel isn't live, YouTube shows an "unavailable" screen: switch channels.
+- Video starts muted because browsers block autoplay with sound. Press `M` (or use the player's own button) for sound.
+- **CUSTOM>** (below the player) takes any YouTube video or live link (`watch?v=`, `youtu.be/`, `/live/…`) or a channel ID (`UC…`) and adds it as a channel. It's saved in your browser. `@handle` links can't be used because looking up a handle needs a YouTube API key.
+- The channel list is `VIDEO_CHANNELS` at the top of `app.js`. Each entry is a YouTube channel ID. If one ever stops working, its "open on YouTube ↗" link under the player shows whether the ID is still right.
+- Video can use a lot of hotel bandwidth: `0` turns it off, and the choice is remembered.
 
 ## NASA API key
 

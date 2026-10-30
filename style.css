@@ -98,6 +98,18 @@ button:hover, button:focus-visible { background: var(--fg); color: var(--bg); ou
 }
 .tile.wide { grid-column: 1 / -1; }
 
+/* Live video: spans two rows so location and system stack beside it. */
+#tile-video { grid-row: span 2; }
+.channels { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.channels button { font-size: 12px; padding: 1px 6px; }
+.channels button.on { background: var(--fg); color: var(--bg); }
+.video-frame { aspect-ratio: 16 / 9; width: 100%; background: #000; border: 1px solid var(--faint); }
+.video-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+.video-off { height: 100%; display: flex; align-items: center; justify-content: center; color: var(--dim); }
+.video-status { margin-top: 6px; font-size: 12px; }
+.video-custom { margin-top: 8px; font-size: 12px; }
+.video-custom input { flex: 1; min-width: 0; }
+
 /* Wide screens: weather | alerts | world map (2 cols) share the top row.
    A container query (not a media query) so it follows the page's CSS width,
    which kiosk mode changes with zoom. */
@@ -234,7 +246,7 @@ table.tt.legend td:first-child { white-space: nowrap; }
 
 /* Kiosk / hotel-TV mode: zoom is set from JS; hide the pointer and controls */
 html.kiosk, html.kiosk * { cursor: none !important; }
-html.kiosk .footer .keyform, html.kiosk .actions { display: none; }
+html.kiosk .footer .keyform, html.kiosk .actions, html.kiosk .video-custom { display: none; }
 html.kiosk .bootlog { max-height: 4.5em; }
 
 @media (prefers-reduced-motion: reduce) {

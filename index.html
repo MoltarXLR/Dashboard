@@ -38,28 +38,42 @@
         <div class="body" id="map-body"><span class="dim">plotting<span class="cursor">_</span></span></div>
       </section>
 
+      <section class="tile" id="tile-video">
+        <h2><span class="tag">04</span> LIVE VIDEO <span class="dim" id="video-now"></span></h2>
+        <div class="body">
+          <div class="channels" id="video-channels"></div>
+          <div class="video-frame" id="video-frame"></div>
+          <div class="video-status" id="video-status"></div>
+          <form id="video-custom-form" class="keyform video-custom">
+            <label for="video-custom">CUSTOM&gt;</label>
+            <input id="video-custom" type="text" placeholder="YouTube link or channel ID" autocomplete="off" spellcheck="false">
+            <button type="submit">ADD</button>
+          </form>
+        </div>
+      </section>
+
       <section class="tile" id="tile-location">
-        <h2><span class="tag">04</span> LOCATION</h2>
+        <h2><span class="tag">05</span> LOCATION</h2>
         <div class="body" id="location-body"><span class="dim">acquiring fix<span class="cursor">_</span></span></div>
       </section>
 
       <section class="tile" id="tile-system">
-        <h2><span class="tag">05</span> SYSTEM / NETWORK</h2>
+        <h2><span class="tag">06</span> SYSTEM / NETWORK</h2>
         <div class="body" id="system-body"><span class="dim">probing<span class="cursor">_</span></span></div>
       </section>
 
       <section class="tile wide" id="tile-health">
-        <h2><span class="tag">06</span> RESPIRATORY / PANDEMIC CONDITIONS</h2>
+        <h2><span class="tag">07</span> RESPIRATORY / PANDEMIC CONDITIONS</h2>
         <div class="body" id="health-body"><span class="dim">waiting for location<span class="cursor">_</span></span></div>
       </section>
 
       <section class="tile" id="tile-quake">
-        <h2><span class="tag">07</span> SEISMIC // LATEST M4.0+</h2>
+        <h2><span class="tag">08</span> SEISMIC // LATEST M4.0+</h2>
         <div class="body" id="quake-body"><span class="dim">querying usgs<span class="cursor">_</span></span></div>
       </section>
 
       <section class="tile" id="tile-neo">
-        <h2><span class="tag">08</span> NEAR-EARTH OBJECTS // INBOUND</h2>
+        <h2><span class="tag">09</span> NEAR-EARTH OBJECTS // INBOUND</h2>
         <div class="body" id="neo-body"><span class="dim">querying nasa neows<span class="cursor">_</span></span></div>
       </section>
     </main>
@@ -70,7 +84,7 @@
         <input id="nasa-key" type="text" placeholder="DEMO_KEY" autocomplete="off" spellcheck="false">
         <button type="submit">SET</button>
       </form>
-      <span class="dim">Data: browser Geolocation · BigDataCloud · ipify/GeoJS · Open-Meteo · NWS · OpenFEMA · CDC NSSP · USGS · NASA NeoWs</span>
+      <span class="dim">Data: browser Geolocation · BigDataCloud · ipify/GeoJS · Open-Meteo · NWS · OpenFEMA · YouTube · CDC NSSP · USGS · NASA NeoWs</span>
     </footer>
   </div>
   <script src="worldmask.js"></script>
