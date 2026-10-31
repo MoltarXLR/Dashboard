@@ -98,8 +98,7 @@ button:hover, button:focus-visible { background: var(--fg); color: var(--bg); ou
 }
 .tile.wide { grid-column: 1 / -1; }
 
-/* Live video: spans two rows so location and system stack beside it. */
-#tile-video { grid-row: span 2; }
+/* Live video + internet radio share a row whenever two tiles fit side by side. */
 .channels { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .channels button { font-size: 12px; padding: 1px 6px; }
 .channels button.on { background: var(--fg); color: var(--bg); }
@@ -109,6 +108,15 @@ button:hover, button:focus-visible { background: var(--fg); color: var(--bg); ou
 .video-status { margin-top: 6px; font-size: 12px; }
 .video-custom { margin-top: 8px; font-size: 12px; }
 .video-custom input { flex: 1; min-width: 0; }
+.radio-controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px; }
+.radio-status { margin-bottom: 8px; min-height: 1.45em; }
+.radio-label { margin-top: 10px; }
+.big-ish { font-size: 18px; font-weight: bold; }
+.radio-search { margin-top: 4px; font-size: 12px; }
+.radio-search input { flex: 1; min-width: 0; }
+.radio-results tr.pick { cursor: pointer; }
+.radio-results tr.pick:hover td { background: var(--faint); }
+.radio-results td { white-space: normal; }
 
 /* Wide screens: weather | alerts | world map (2 cols) share the top row.
    A container query (not a media query) so it follows the page's CSS width,
@@ -246,7 +254,7 @@ table.tt.legend td:first-child { white-space: nowrap; }
 
 /* Kiosk / hotel-TV mode: zoom is set from JS; hide the pointer and controls */
 html.kiosk, html.kiosk * { cursor: none !important; }
-html.kiosk .footer .keyform, html.kiosk .actions, html.kiosk .video-custom { display: none; }
+html.kiosk .footer .keyform, html.kiosk .actions, html.kiosk .video-custom, html.kiosk .radio-search, html.kiosk .radio-results { display: none; }
 html.kiosk .bootlog { max-height: 4.5em; }
 
 @media (prefers-reduced-motion: reduce) {

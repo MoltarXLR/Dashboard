@@ -52,28 +52,53 @@
         </div>
       </section>
 
+      <section class="tile" id="tile-radio">
+        <h2><span class="tag">05</span> INTERNET RADIO <span class="dim" id="radio-now"></span></h2>
+        <div class="body">
+          <div class="radio-controls">
+            <button type="button" id="radio-play">[P]LAY</button>
+            <button type="button" id="radio-next" title="Next preset (N)">[N]EXT</button>
+            <span class="dim">VOL</span>
+            <button type="button" id="radio-down" title="Volume down ([)">[-]</button>
+            <span id="radio-vol">80%</span>
+            <button type="button" id="radio-up" title="Volume up (])">[+]</button>
+          </div>
+          <div class="radio-status" id="radio-status"></div>
+          <div id="radio-info"></div>
+          <div class="dim radio-label">&gt; presets</div>
+          <div class="channels" id="radio-presets"></div>
+          <form id="radio-search-form" class="keyform radio-search">
+            <label for="radio-search">TUNE&gt;</label>
+            <input id="radio-search" type="text" placeholder="search any station, e.g. WNYC, RNZ, jazz" autocomplete="off" spellcheck="false">
+            <button type="submit">FIND</button>
+          </form>
+          <div id="radio-results" class="radio-results"></div>
+          <div class="src">src: radio-browser.info community directory · streams play straight from each broadcaster</div>
+        </div>
+      </section>
+
       <section class="tile" id="tile-location">
-        <h2><span class="tag">05</span> LOCATION</h2>
+        <h2><span class="tag">06</span> LOCATION</h2>
         <div class="body" id="location-body"><span class="dim">acquiring fix<span class="cursor">_</span></span></div>
       </section>
 
       <section class="tile" id="tile-system">
-        <h2><span class="tag">06</span> SYSTEM / NETWORK</h2>
+        <h2><span class="tag">07</span> SYSTEM / NETWORK</h2>
         <div class="body" id="system-body"><span class="dim">probing<span class="cursor">_</span></span></div>
       </section>
 
       <section class="tile wide" id="tile-health">
-        <h2><span class="tag">07</span> RESPIRATORY / PANDEMIC CONDITIONS</h2>
+        <h2><span class="tag">08</span> RESPIRATORY / PANDEMIC CONDITIONS</h2>
         <div class="body" id="health-body"><span class="dim">waiting for location<span class="cursor">_</span></span></div>
       </section>
 
       <section class="tile" id="tile-quake">
-        <h2><span class="tag">08</span> SEISMIC // LATEST M4.0+</h2>
+        <h2><span class="tag">09</span> SEISMIC // LATEST M4.0+</h2>
         <div class="body" id="quake-body"><span class="dim">querying usgs<span class="cursor">_</span></span></div>
       </section>
 
       <section class="tile" id="tile-neo">
-        <h2><span class="tag">09</span> NEAR-EARTH OBJECTS // INBOUND</h2>
+        <h2><span class="tag">10</span> NEAR-EARTH OBJECTS // INBOUND</h2>
         <div class="body" id="neo-body"><span class="dim">querying nasa neows<span class="cursor">_</span></span></div>
       </section>
     </main>
@@ -84,7 +109,7 @@
         <input id="nasa-key" type="text" placeholder="DEMO_KEY" autocomplete="off" spellcheck="false">
         <button type="submit">SET</button>
       </form>
-      <span class="dim">Data: browser Geolocation · BigDataCloud · ipify/GeoJS · Open-Meteo · NWS · OpenFEMA · YouTube · CDC NSSP · USGS · NASA NeoWs</span>
+      <span class="dim">Data: browser Geolocation · BigDataCloud · ipify/GeoJS · Open-Meteo · NWS · OpenFEMA · YouTube · Radio Browser · CDC NSSP · USGS · NASA NeoWs</span>
     </footer>
   </div>
   <script src="worldmask.js"></script>

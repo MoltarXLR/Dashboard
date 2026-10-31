@@ -41,14 +41,27 @@
     { key: "nhk", name: "NHK WORLD", channel: "UCSPEjw8F2nQDtmUKPFNF7_A", note: "live on YouTube only at times" },
     { key: "bbc", name: "BBC NEWS", channel: "UC16niRr50-MSBwiO3YDb3RA", note: "live on YouTube only for some events" },
     { key: "abc", name: "ABC NEWS LIVE", channel: "UCBi2mrWuNuyYy4gbM6fU18Q" },
-    { key: "nbc", name: "NBC NEWS NOW", channel: "UCeY0bbntWzzVIaj2z3QigXg" },
-    { key: "cbs", name: "CBS NEWS 24/7", channel: "UC8p1vwvWtl6T73JiExfWs1g" },
+    { key: "cspan", name: "C-SPAN", channel: "UCb--64Gl51jIEVE-GLDAVTg", note: "live on YouTube only for some hearings and events; the full C-SPAN channels need a TV-provider login at c-span.org" },
     { key: "livenow", name: "LIVENOW FOX", channel: "UCJg9wBPyKMNA5sRDnvzmkdg" },
     { key: "sky", name: "SKY NEWS", channel: "UCoMdktPbSTixAyNGwb-UYkQ" },
     { key: "dw", name: "DW NEWS", channel: "UCknLrEdhRCp1aegoMqRaCZg" },
     { key: "aje", name: "AL JAZEERA", channel: "UCNye-wNBqNL5ZzHSJj3l8Bg" },
   ];
   const DEFAULT_CHANNEL = "abc";
+
+  // Internet radio presets. Each is a search of the free Radio Browser directory
+  // (radio-browser.info); the most-voted working HTTPS stream that matches is played,
+  // so stream addresses never go stale in this file.
+  const RADIO_PRESETS = [
+    { key: "cspan", name: "C-SPAN RADIO", query: { name: "C-SPAN", countrycode: "US" } },
+    { key: "npr", name: "NPR", query: { name: "NPR", countrycode: "US" } },
+    { key: "bbcws", name: "BBC WORLD SERVICE", query: { name: "BBC World Service" } },
+    { key: "nhk", name: "NHK RADIO", query: { name: "NHK", countrycode: "JP" } },
+    { key: "bloomberg", name: "BLOOMBERG RADIO", query: { name: "Bloomberg" } },
+    { key: "jpop", name: "J-POP", query: { tag: "jpop", tagExact: "true" } },
+    { key: "classical", name: "CLASSICAL", query: { tag: "classical", tagExact: "true" } },
+  ];
+  const RADIO_MIRRORS = ["de1", "de2", "fi1"].map((m) => `https://${m}.api.radio-browser.info`);
 
   const LUNAR_KM = 384400;
 
@@ -151,7 +164,7 @@
     });
   }
 
-  // ---------- 06: system / network ----------
+  // ---------- 07: system / network ----------
 
   function parseUA(ua) {
     const browsers = [
@@ -241,7 +254,7 @@
     return ipGeo;
   }
 
-  // ---------- 05: location ----------
+  // ---------- 06: location ----------
 
   function getBrowserPosition() {
     return new Promise((resolve, reject) => {
@@ -645,7 +658,7 @@
     setBody("alerts-body", sections.join("<br>"));
   }
 
-  // ---------- 07: CDC / pandemic ----------
+  // ---------- 08: CDC / pandemic ----------
 
   const PATHOGENS = [
     ["covid", "COVID-19"],
@@ -935,7 +948,7 @@
     svg.addEventListener("click", onPoint);
   }
 
-  // ---------- 08: earthquakes ----------
+  // ---------- 09: earthquakes ----------
 
   const QUAKE_WINDOW_DAYS = 7;
 
@@ -995,7 +1008,7 @@
     }
   }
 
-  // ---------- 09: near-earth objects ----------
+  // ---------- 10: near-earth objects ----------
 
   function getNasaKey() {
     try { return localStorage.getItem("nasa_api_key") || "DEMO_KEY"; } catch (_) { return "DEMO_KEY"; }
@@ -1123,6 +1136,7 @@
     if (!video.current) return;
     video.muted = !video.muted;
     playerCommand(video.muted ? "mute" : "unMute");
+    if (!video.muted) stopRadio("video sound on");
     renderVideoStatus();
   }
 
@@ -1190,6 +1204,180 @@
       try { start = localStorage.getItem("sitrep_video"); } catch (_) {}
     }
     selectChannel(allChannels().some((c) => c.key === start) || start === "off" ? start : DEFAULT_CHANNEL);
+  }
+
+  // ---------- 05: internet radio ----------
+
+  const radio = { audio: new Audio(), current: null, startedAt: 0, results: [], timer: 0 };
+
+  async function radioSearch(query, limit = 20) {
+    const q = new URLSearchParams({ ...query, hidebroken: "true", is_https: "true", order: "votes", reverse: "true", limit: String(limit) });
+    let lastError;
+    for (const base of RADIO_MIRRORS) {
+      try {
+        const rows = await fetchJSON(`${base}/json/stations/search?${q}`, { timeout: 10000 });
+        // The page is https, so only https streams can play; skip HLS, which most browsers can't play in <audio>.
+        return rows
+          .filter((r) => (r.url_resolved || r.url || "").startsWith("https://") && !r.hls)
+          .map((r) => ({ ...r, stream: r.url_resolved || r.url, mirror: base }));
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    throw lastError || new Error("radio directory unreachable");
+  }
+
+  function radioStatus(text, cls = "") {
+    $("radio-status").innerHTML = `<span class="${cls}">&gt; ${esc(text)}</span>`;
+  }
+
+  function renderRadioNow() {
+    const st = radio.current;
+    $("radio-now").textContent = st ? `// ${st.label}` : "// OFF";
+    $("radio-play").textContent = !radio.audio.paused ? "[P]AUSE" : "[P]LAY";
+    $("radio-vol").textContent = `${Math.round(radio.audio.volume * 100)}%`;
+    $("radio-info").innerHTML = st
+      ? kv([
+          ["STATION", `<span class="big-ish">${esc(st.name.trim())}</span>`],
+          ["FROM", esc([st.state, st.country].filter(Boolean).join(", ") || "--")],
+          ["STREAM", `${esc(st.codec || "?")} ${st.bitrate ? `${st.bitrate} kbps` : ""}`],
+          st.tags ? ["TAGS", esc(st.tags.split(",").slice(0, 5).join(", "))] : null,
+          st.homepage ? ["SITE", `<a href="${esc(st.homepage)}" target="_blank" rel="noopener">${esc(st.homepage.replace(/^https?:\/\//, "").replace(/\/$/, "").slice(0, 40))} ↗</a>`] : null,
+          ["ON AIR", `<span id="radio-clock">${radio.startedAt && !radio.audio.paused ? fmtElapsed(Date.now() - radio.startedAt) : "--"}</span>`],
+        ])
+      : '<span class="dim">pick a preset below, or search for any station</span>';
+    document.querySelectorAll("#radio-presets button").forEach((b) => b.classList.toggle("on", b.dataset.key === st?.presetKey));
+  }
+
+  const fmtElapsed = (ms) => {
+    const t = Math.floor(ms / 1000);
+    return `${Math.floor(t / 3600)}:${pad(Math.floor((t % 3600) / 60))}:${pad(t % 60)}`;
+  };
+
+  function playStation(st, label, presetKey) {
+    radio.current = { ...st, label, presetKey };
+    radio.audio.src = st.stream;
+    radio.startedAt = 0;
+    try { localStorage.setItem("sitrep_radio", JSON.stringify({ presetKey, label, st: { name: st.name, stream: st.stream, stationuuid: st.stationuuid, country: st.country, state: st.state, codec: st.codec, bitrate: st.bitrate, tags: st.tags, homepage: st.homepage } })); } catch (_) {}
+    radioStatus(`tuning ${st.name.trim()}…`, "dim");
+    renderRadioNow();
+    radio.audio.play().catch((e) => radioStatus(`can't start: ${e.message}`, "warn"));
+    // Radio Browser asks clients to report plays so its popularity ranking stays useful.
+    if (st.stationuuid && st.mirror) fetch(`${st.mirror}/json/url/${st.stationuuid}`).catch(() => {});
+  }
+
+  async function playPreset(key) {
+    const p = RADIO_PRESETS.find((x) => x.key === key);
+    if (!p) return;
+    radioStatus(`searching directory for ${p.name}…`, "dim");
+    try {
+      const [best] = await radioSearch(p.query, 10);
+      if (!best) {
+        radioStatus(`no working https stream found for ${p.name}`, "warn");
+        return;
+      }
+      playStation(best, p.name, p.key);
+    } catch (e) {
+      radioStatus(`radio directory unreachable: ${e.message}`, "alert");
+    }
+  }
+
+  function stopRadio(reason) {
+    if (radio.audio.paused) return;
+    radio.audio.pause();
+    if (reason) radioStatus(`paused (${reason})`, "dim");
+    renderRadioNow();
+  }
+
+  function toggleRadio() {
+    if (!radio.current) return playPreset(RADIO_PRESETS[0].key);
+    if (radio.audio.paused) radio.audio.play().catch((e) => radioStatus(`can't start: ${e.message}`, "warn"));
+    else stopRadio("paused");
+  }
+
+  function nextPreset() {
+    const i = RADIO_PRESETS.findIndex((p) => p.key === radio.current?.presetKey);
+    playPreset(RADIO_PRESETS[(i + 1) % RADIO_PRESETS.length].key);
+  }
+
+  function setVolume(delta) {
+    radio.audio.volume = Math.max(0, Math.min(1, Math.round((radio.audio.volume + delta) * 10) / 10));
+    try { localStorage.setItem("sitrep_radio_vol", String(radio.audio.volume)); } catch (_) {}
+    renderRadioNow();
+  }
+
+  function renderRadioResults() {
+    $("radio-results").innerHTML = radio.results.length
+      ? `<table class="tt">${radio.results.map((r, i) =>
+          `<tr data-i="${i}" class="pick"><td>${esc(r.name.trim().slice(0, 40))}</td><td>${esc(r.countrycode || "")}</td><td>${esc(r.codec || "")} ${r.bitrate || ""}</td></tr>`).join("")}</table>`
+      : "";
+  }
+
+  function initRadio() {
+    const a = radio.audio;
+    a.preload = "none";
+    try { a.volume = Number(localStorage.getItem("sitrep_radio_vol") ?? 0.8); } catch (_) { a.volume = 0.8; }
+    a.addEventListener("playing", () => {
+      if (!radio.startedAt) radio.startedAt = Date.now();
+      radioStatus("playing", "");
+      // Radio and video sound together are a mess: mute the video.
+      if (video.current && !video.muted) toggleMute();
+      renderRadioNow();
+    });
+    a.addEventListener("waiting", () => radioStatus("buffering…", "dim"));
+    a.addEventListener("pause", renderRadioNow);
+    a.addEventListener("error", () => {
+      radioStatus("stream failed — try another station (N = next preset)", "alert");
+      renderRadioNow();
+    });
+    radio.timer = setInterval(() => {
+      const el = $("radio-clock");
+      if (el && radio.startedAt && !a.paused) el.textContent = fmtElapsed(Date.now() - radio.startedAt);
+    }, 1000);
+
+    $("radio-presets").innerHTML = RADIO_PRESETS.map((p) => `<button type="button" data-key="${esc(p.key)}">${esc(p.name)}</button>`).join("");
+    $("radio-presets").addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-key]");
+      if (b) playPreset(b.dataset.key);
+    });
+    $("radio-play").addEventListener("click", toggleRadio);
+    $("radio-next").addEventListener("click", nextPreset);
+    $("radio-down").addEventListener("click", () => setVolume(-0.1));
+    $("radio-up").addEventListener("click", () => setVolume(0.1));
+    $("radio-search-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const term = $("radio-search").value.trim();
+      if (!term) return;
+      $("radio-search").blur();
+      radioStatus(`searching for "${term}"…`, "dim");
+      try {
+        radio.results = (await radioSearch({ name: term }, 30)).slice(0, 8);
+        radioStatus(radio.results.length ? `${radio.results.length} station(s) found — click one` : `nothing playable found for "${term}"`, radio.results.length ? "" : "warn");
+      } catch (err) {
+        radio.results = [];
+        radioStatus(`radio directory unreachable: ${err.message}`, "alert");
+      }
+      renderRadioResults();
+    });
+    $("radio-results").addEventListener("click", (e) => {
+      const row = e.target.closest("tr[data-i]");
+      if (row) playStation(radio.results[Number(row.dataset.i)], "SEARCH", null);
+    });
+
+    // Restore the last station, ready to play (browsers block audio until you press play).
+    try {
+      const saved = JSON.parse(localStorage.getItem("sitrep_radio") || "null");
+      if (saved?.st?.stream) {
+        radio.current = { ...saved.st, label: saved.label, presetKey: saved.presetKey };
+        a.src = saved.st.stream;
+        radioStatus("ready — press P or PLAY", "dim");
+      } else {
+        radioStatus("off — press P or pick a preset", "dim");
+      }
+    } catch (_) {
+      radioStatus("off — press P or pick a preset", "dim");
+    }
+    renderRadioNow();
   }
 
   // ---------- kiosk mode (hotel TV) ----------
@@ -1321,6 +1509,7 @@
     initNasaKeyForm();
     initKiosk();
     initVideo();
+    initRadio();
     renderMap();
     refreshAll();
 
@@ -1330,6 +1519,10 @@
       if (e.key === "r" || e.key === "R") refreshAll();
       if (e.key === "t" || e.key === "T") $("btn-theme").click();
       if (e.key === "m" || e.key === "M") toggleMute();
+      if (e.key === "p" || e.key === "P") toggleRadio();
+      if (e.key === "n" || e.key === "N") nextPreset();
+      if (e.key === "[") setVolume(-0.1);
+      if (e.key === "]") setVolume(0.1);
       if (e.key === "0") selectChannel("off");
       else if (/^[1-9]$/.test(e.key) && allChannels()[Number(e.key) - 1]) selectChannel(allChannels()[Number(e.key) - 1].key);
       if (e.key === "k" || e.key === "K") {
